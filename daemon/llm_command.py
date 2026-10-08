@@ -59,8 +59,10 @@ Available desktop controls:
 - Media controls: `playerctl play-pause`, `playerctl next`, `playerctl previous`
 - Audio volume: `wpctl set-volume @DEFAULT_AUDIO_SINK@ <N>%`, `wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+`, `wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-`, `wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle`
 - System tools: `hyprlock`, `~/.config/hypr/scripts/screenshot.sh area`, `~/.config/hypr/scripts/screenshot.sh output`
-- Desktop apps: `google-chrome <url> &`, `zen &`, `obsidian &`, `discord &`, `zed &`, `kitty &`, `nautilus &`, `xdg-open <url> &`
-- Multiple sequential desktop actions (e.g. switch workspace then open app): wrap in subshell or sequence with sleep, e.g. `(hyprctl dispatch workspace 5; sleep 0.2; google-chrome https://www.youtube.com) &`
+- Desktop apps: `google-chrome --new-window <url> &`, `zen &`, `obsidian &`, `discord &`, `zed &`, `kitty &`, `nautilus &`, `xdg-open <url> &`
+- Multiple sequential desktop actions (e.g. switch workspace then open app): wrap in subshell or sequence with sleep, e.g. `(hyprctl dispatch workspace 5; sleep 0.2; google-chrome --new-window https://www.youtube.com) &`
+- Workspaces: Workspaces 1-10 are numbers (e.g. `hyprctl dispatch workspace 3`). For non-numeric names, use `hyprctl dispatch workspace name:<name>`.
+- Syntax rule: Never output `&;` or `;&`. In a subshell `(...) &`, separate sequential commands with `;` and do not put `&` inside the parentheses.
 - Package managers: flatpak (preferred for apps: `flatpak install --user -y flathub <id>`), apt (system).
 - Standard bash CLI commands.
 
@@ -98,6 +100,10 @@ Rules:
             if cmd.startswith("$ ") or cmd.startswith("# "):
                 cmd = cmd[2:].strip()
 
+            # Prevent fatal bash syntax errors like `&;` or `;&`
+            cmd = re.sub(r"&\s*;", ";", cmd)
+            cmd = re.sub(r";\s*&", ";", cmd)
+
             if "flatpak install" in cmd and "io.obsidian.Obsidian" in cmd:
                 cmd = cmd.replace("io.obsidian.Obsidian", "md.obsidian.Obsidian")
             if "flatpak run com.discord.Discord" in cmd:
@@ -118,9 +124,10 @@ HYPR_DISPATCHERS = {
     "togglefloating",
     "focuswindow",
 }
-# Launchers that may take positional args (URLs, paths) but never flags:
-# Chrome's --renderer-cmd-prefix / --gpu-launcher run arbitrary programs.
+# Launchers that may take positional args (URLs, paths) and safe UI flags:
+# Chrome's --renderer-cmd-prefix / --gpu-launcher run arbitrary programs, but --new-window / --incognito are safe.
 APP_LAUNCHERS = {"google-chrome", "zen", "obsidian", "discord", "zed", "nautilus"}
+SAFE_FLAGS = {"--new-window", "--incognito", "-n"}
 
 
 def is_allowed_step(argv):
@@ -142,7 +149,7 @@ def is_allowed_step(argv):
     if name == "flatpak":
         return len(args) == 2 and args[0] == "run" and not args[1].startswith("-")
     if name in APP_LAUNCHERS:
-        return not any(a.startswith("-") for a in args)
+        return all(not a.startswith("-") or a in SAFE_FLAGS for a in args)
     return False
 
 

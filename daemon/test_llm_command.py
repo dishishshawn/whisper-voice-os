@@ -15,6 +15,8 @@ ALLOWED = [
     "flatpak run com.discordapp.Discord",
     "zen &",
     "google-chrome https://www.youtube.com &",
+    "google-chrome --new-window https://www.youtube.com &",
+    "(hyprctl dispatch workspace 5; sleep 0.2; google-chrome --new-window https://www.youtube.com) &",
     "(hyprctl dispatch workspace 5; sleep 0.2; google-chrome https://www.youtube.com) &",
     "hyprctl dispatch workspace 2 && obsidian &",
     "google-chrome https://www.youtube.com/results?search_query=lofi &",
