@@ -1,0 +1,16 @@
+{
+  "model": "large-v3-turbo",
+  "device": "cuda",
+  "compute_type": "float16",
+  "language": "en",
+  "beam_size": 1,
+  "vad_filter": true,
+  "sound_enabled": true,
+  "sound_volume": 0.25,
+  "sound_start": "/usr/share/sounds/freedesktop/stereo/audio-volume-change.oga",
+  "sound_finish": "/usr/share/sounds/gnome/default/alerts/click.ogg",
+  "ollama_url": "http://localhost:11434/api/generate",
+  "llm_model": "qwen3:14b",
+  "auto_execute": false,
+  "terminal_auto_command": false
+}

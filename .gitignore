@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+
+# Runtime files
+*.sock
+*.pid
+*.wav
+*.log
+recording.pid
+mode.txt
+exec.log
+
+# OS
+.DS_Store
+Thumbs.db

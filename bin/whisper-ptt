@@ -1,0 +1,237 @@
+#!/usr/bin/env bash
+set -e
+
+RUNTIME_DIR="/run/user/$(id -u)/whisper-ptt"
+mkdir -p "$RUNTIME_DIR"
+
+PID_FILE="$RUNTIME_DIR/recording.pid"
+MODE_FILE="$RUNTIME_DIR/mode.txt"
+AUDIO_FILE="$RUNTIME_DIR/audio.wav"
+SOCK_FILE="/run/user/$(id -u)/whisper-ptt.sock"
+CLIENT_PY="/home/shawnion/.local/share/whisper-ptt/client.py"
+LLM_CMD_PY="/home/shawnion/.local/share/whisper-ptt/llm_command.py"
+CONFIG_FILE="$HOME/.config/whisper-ptt/config.json"
+
+# Defaults
+ENABLE_SOUND=1
+SOUND_VOL="0.25"
+SOUND_START="/usr/share/sounds/freedesktop/stereo/audio-volume-change.oga"
+SOUND_FINISH="/usr/share/sounds/gnome/default/alerts/click.ogg"
+AUTO_EXECUTE=0
+TERMINAL_AUTO_COMMAND=0
+
+# Read config if available
+if [ -f "$CONFIG_FILE" ]; then
+    eval "$(python3 -c '
+import json, sys
+try:
+    with open("'"$CONFIG_FILE"'") as f:
+        cfg = json.load(f)
+    en = 1 if cfg.get("sound_enabled", True) else 0
+    vol = float(cfg.get("sound_volume", 0.25))
+    s_start = cfg.get("sound_start", "/usr/share/sounds/freedesktop/stereo/audio-volume-change.oga")
+    s_fin = cfg.get("sound_finish", "/usr/share/sounds/gnome/default/alerts/click.ogg")
+    auto_exec = 1 if cfg.get("auto_execute", False) else 0
+    term_auto = 1 if cfg.get("terminal_auto_command", False) else 0
+    print(f"ENABLE_SOUND={en}")
+    print(f"SOUND_VOL={vol:.2f}")
+    print(f"SOUND_START=\"{s_start}\"")
+    print(f"SOUND_FINISH=\"{s_fin}\"")
+    print(f"AUTO_EXECUTE={auto_exec}")
+    print(f"TERMINAL_AUTO_COMMAND={term_auto}")
+except Exception:
+    pass
+')"
+fi
+
+play_sound() {
+    local sound_file="$1"
+    if [ "$ENABLE_SOUND" -eq 1 ] && [ -f "$sound_file" ]; then
+        pw-play --volume "$SOUND_VOL" "$sound_file" >/dev/null 2>&1 &
+    fi
+}
+
+start_recording() {
+    local req_mode="${1:-dictate}"
+
+    if [ -f "$PID_FILE" ]; then
+        local old_pid
+        old_pid=$(cat "$PID_FILE" 2>/dev/null || true)
+        if [ -n "$old_pid" ] && kill -0 "$old_pid" 2>/dev/null; then
+            exit 0
+        fi
+    fi
+
+    echo "$req_mode" > "$MODE_FILE"
+
+    # Ensure daemon is up
+    if [ ! -S "$SOCK_FILE" ]; then
+        systemctl --user start whisper-ptt.service 2>/dev/null || true
+    fi
+
+    rm -f "$AUDIO_FILE"
+
+    play_sound "$SOUND_START"
+
+    if [ "$req_mode" = "command" ]; then
+        notify-send -t 1200 -h string:x-canonical-private-synchronous:whisper-ptt -a "Voice OS" "⚡ Listening for command..." "Say what you want to do..."
+    else
+        notify-send -t 1200 -h string:x-canonical-private-synchronous:whisper-ptt -a "Whisper PTT" "🎙️ Listening..." "Speak now..."
+    fi
+
+    pw-record --rate 16000 --channels 1 "$AUDIO_FILE" >/dev/null 2>&1 &
+    echo $! > "$PID_FILE"
+}
+
+stop_recording() {
+    if [ ! -f "$PID_FILE" ]; then
+        exit 0
+    fi
+
+    local pid
+    pid=$(cat "$PID_FILE" 2>/dev/null || true)
+    rm -f "$PID_FILE"
+
+    local current_mode="dictate"
+    if [ -f "$MODE_FILE" ]; then
+        current_mode=$(cat "$MODE_FILE" 2>/dev/null || echo "dictate")
+        rm -f "$MODE_FILE"
+    fi
+
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        kill -INT "$pid" 2>/dev/null || true
+        for _ in {1..20}; do
+            if ! kill -0 "$pid" 2>/dev/null; then break; fi
+            sleep 0.02
+        done
+    fi
+
+    if [ ! -f "$AUDIO_FILE" ]; then
+        exit 0
+    fi
+
+    local file_size
+    file_size=$(stat -c%s "$AUDIO_FILE" 2>/dev/null || echo 0)
+    # Ignore accidental micro-presses (< 0.25 seconds)
+    if [ "$file_size" -lt 8000 ]; then
+        rm -f "$AUDIO_FILE"
+        exit 0
+    fi
+
+    if [ ! -S "$SOCK_FILE" ]; then
+        notify-send -t 3000 -h string:x-canonical-private-synchronous:whisper-ptt -a "Whisper PTT" "Error" "Whisper daemon is not running."
+        exit 1
+    fi
+
+    # Query whisper daemon
+    local text
+    text=$("$CLIENT_PY" "$SOCK_FILE" "$AUDIO_FILE" 2>/dev/null || true)
+    rm -f "$AUDIO_FILE"
+
+    if [ -z "$text" ]; then
+        notify-send -t 1200 -h string:x-canonical-private-synchronous:whisper-ptt -a "Whisper PTT" "🎙️ No speech detected"
+        exit 0
+    fi
+
+    play_sound "$SOUND_FINISH"
+
+    # Check active window class
+    local active_class
+    active_class=$(hyprctl activewindow -j 2>/dev/null | python3 -c 'import sys, json; print(json.load(sys.stdin).get("class","").lower())' 2>/dev/null || true)
+
+    # Check if this should be processed by Voice OS / LLM Command Generator
+    local is_command=0
+    local cmd_prompt="$text"
+
+    if [ "$current_mode" = "command" ]; then
+        is_command=1
+    elif [[ "$text" =~ ^([Cc]ommand|[Rr]un|[Cc]md|[Tt]erminal|[Dd]o)[[:space:]:]+(.*) ]]; then
+        is_command=1
+        cmd_prompt="${BASH_REMATCH[2]}"
+    elif [ "$TERMINAL_AUTO_COMMAND" -eq 1 ]; then
+        if [[ "$active_class" =~ ^(kitty|terminal|alacritty|foot|wezterm)$ ]]; then
+            is_command=1
+        fi
+    fi
+
+    if [ "$is_command" -eq 1 ]; then
+        notify-send -t 1200 -h string:x-canonical-private-synchronous:whisper-ptt -a "Voice OS" "🧠 Thinking..." "$cmd_prompt"
+        local gen_cmd
+        gen_cmd=$("$LLM_CMD_PY" "$cmd_prompt" 2>/dev/null || true)
+
+        if [ -n "$gen_cmd" ]; then
+            # Determine if this is a direct system action or a terminal command
+            local is_sys_act=0
+            if [[ "$gen_cmd" =~ (hyprctl|wpctl|playerctl|hyprlock|xdg-open|flatpak[[:space:]]+run|&$) ]] || [[ ! "$active_class" =~ ^(kitty|terminal|alacritty|foot|wezterm)$ ]]; then
+                is_sys_act=1
+            fi
+
+            notify-send -t 2500 -h string:x-canonical-private-synchronous:whisper-ptt -a "Voice OS" "⚡ Executing:" "$gen_cmd"
+            printf "%s" "$gen_cmd" | wl-copy
+
+            if [ "$is_sys_act" -eq 1 ]; then
+                # Execute directly in background
+                bash -c "$gen_cmd" >> "$RUNTIME_DIR/exec.log" 2>&1 &
+            else
+                # Type onto terminal prompt
+                sleep 0.05
+                wtype -d 1 -- "$gen_cmd"
+                if [ "$AUTO_EXECUTE" -eq 1 ]; then
+                    sleep 0.05
+                    wtype -k Return
+                fi
+            fi
+            exit 0
+        fi
+    fi
+
+    # Standard dictation fallback
+    notify-send -t 1500 -h string:x-canonical-private-synchronous:whisper-ptt -a "Whisper PTT" "Transcribed:" "$text"
+    printf "%s" "$text" | wl-copy
+    sleep 0.05
+    wtype -d 1 -- "$text "
+}
+
+toggle_recording() {
+    local req_mode="${1:-dictate}"
+    if [ -f "$PID_FILE" ]; then
+        local pid
+        pid=$(cat "$PID_FILE" 2>/dev/null || true)
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            stop_recording
+            return
+        fi
+    fi
+    start_recording "$req_mode"
+}
+
+case "${1:-toggle}" in
+    start)
+        start_recording "dictate"
+        ;;
+    command-start)
+        start_recording "command"
+        ;;
+    stop)
+        stop_recording
+        ;;
+    toggle)
+        toggle_recording "dictate"
+        ;;
+    command-toggle)
+        toggle_recording "command"
+        ;;
+    status)
+        if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
+            local m="dictate"
+            [ -f "$MODE_FILE" ] && m=$(cat "$MODE_FILE")
+            echo "Recording ($m, PID: $(cat "$PID_FILE"))"
+        else
+            echo "Idle"
+        fi
+        ;;
+    *)
+        echo "Usage: $0 {start|command-start|stop|toggle|command-toggle|status}"
+        exit 1
+        ;;
+esac

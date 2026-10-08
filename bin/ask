@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Quick CLI assistant: ask <natural language prompt> or ask (voice)
+set -e
+
+LLM_CMD_PY="/home/shawnion/.local/share/whisper-ptt/llm_command.py"
+
+if [ $# -eq 0 ]; then
+    echo "🎙️ Listening... (Speak your request, then press Ctrl+C or wait)"
+    /home/shawnion/.local/bin/whisper-ptt command-toggle
+    exit 0
+fi
+
+PROMPT="$*"
+echo "🧠 Translating: \"$PROMPT\"..."
+CMD=$("$LLM_CMD_PY" "$PROMPT")
+
+if [ -z "$CMD" ]; then
+    echo "❌ Failed to generate command."
+    exit 1
+fi
+
+echo ""
+echo "⚡ Command: $CMD"
+printf "%s" "$CMD" | wl-copy
+echo "📋 (Copied to clipboard)"
+echo ""
+read -r -p "Execute this command? [Y/n] " choice
+case "$choice" in
+    [nN][oO]|[nN])
+        echo "Aborted."
+        ;;
+    *)
+        eval "$CMD"
+        ;;
+esac

@@ -1,0 +1,13 @@
+[Unit]
+Description=Whisper Local Speech-to-Text PTT Daemon
+After=pipewire.service sound.target
+
+[Service]
+Type=simple
+ExecStart=/home/shawnion/.local/share/whisper-ptt/start-daemon.sh
+Restart=always
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target

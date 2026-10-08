@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+exec /usr/bin/flatpak run app.zen_browser.zen "$@"
