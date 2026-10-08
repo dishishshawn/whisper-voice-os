@@ -8,8 +8,8 @@ PID_FILE="$RUNTIME_DIR/recording.pid"
 MODE_FILE="$RUNTIME_DIR/mode.txt"
 AUDIO_FILE="$RUNTIME_DIR/audio.wav"
 SOCK_FILE="/run/user/$(id -u)/whisper-ptt.sock"
-CLIENT_PY="/home/shawnion/.local/share/whisper-ptt/client.py"
-LLM_CMD_PY="/home/shawnion/.local/share/whisper-ptt/llm_command.py"
+CLIENT_PY="$HOME/.local/share/whisper-ptt/client.py"
+LLM_CMD_PY="$HOME/.local/share/whisper-ptt/llm_command.py"
 CONFIG_FILE="$HOME/.config/whisper-ptt/config.json"
 
 # Defaults
@@ -145,7 +145,7 @@ stop_recording() {
 
     if [ "$current_mode" = "command" ]; then
         is_command=1
-    elif [[ "$text" =~ ^([Cc]ommand|[Rr]un|[Cc]md|[Tt]erminal|[Dd]o)[[:space:]:]+(.*) ]]; then
+    elif [[ "$text" =~ ^([Cc]ommand|[Rr]un|[Cc]md|[Tt]erminal)[[:space:]:]+(.*) ]]; then
         is_command=1
         cmd_prompt="${BASH_REMATCH[2]}"
     elif [ "$TERMINAL_AUTO_COMMAND" -eq 1 ]; then
@@ -160,26 +160,23 @@ stop_recording() {
         gen_cmd=$("$LLM_CMD_PY" "$cmd_prompt" 2>/dev/null || true)
 
         if [ -n "$gen_cmd" ]; then
-            # Determine if this is a direct system action or a terminal command
-            local is_sys_act=0
-            if [[ "$gen_cmd" =~ (hyprctl|wpctl|playerctl|hyprlock|xdg-open|flatpak[[:space:]]+run|&$) ]] || [[ ! "$active_class" =~ ^(kitty|terminal|alacritty|foot|wezterm)$ ]]; then
-                is_sys_act=1
-            fi
-
-            notify-send -t 2500 -h string:x-canonical-private-synchronous:whisper-ptt -a "Voice OS" "⚡ Executing:" "$gen_cmd"
             printf "%s" "$gen_cmd" | wl-copy
 
-            if [ "$is_sys_act" -eq 1 ]; then
-                # Execute directly in background
+            if "$LLM_CMD_PY" --check "$gen_cmd"; then
+                # Known desktop action (allowlist in llm_command.py): run directly
+                notify-send -t 2500 -h string:x-canonical-private-synchronous:whisper-ptt -a "Voice OS" "⚡ Executing:" "$gen_cmd"
                 bash -c "$gen_cmd" >> "$RUNTIME_DIR/exec.log" 2>&1 &
-            else
-                # Type onto terminal prompt
+            elif [[ "$active_class" =~ ^(kitty|terminal|alacritty|foot|wezterm)$ && "$gen_cmd" != *[$'\n\r']* ]]; then
+                # Type onto terminal prompt for review (multi-line would press Return mid-way, so it asks instead)
                 sleep 0.05
                 wtype -d 1 -- "$gen_cmd"
                 if [ "$AUTO_EXECUTE" -eq 1 ]; then
                     sleep 0.05
                     wtype -k Return
                 fi
+            else
+                # Anything else outside a terminal: ask first via a Run button
+                ( "$LLM_CMD_PY" --confirm "$gen_cmd" && bash -c "$gen_cmd" >> "$RUNTIME_DIR/exec.log" 2>&1 ) &
             fi
             exit 0
         fi
@@ -223,7 +220,7 @@ case "${1:-toggle}" in
         ;;
     status)
         if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
-            local m="dictate"
+            m="dictate"
             [ -f "$MODE_FILE" ] && m=$(cat "$MODE_FILE")
             echo "Recording ($m, PID: $(cat "$PID_FILE"))"
         else

@@ -4,7 +4,7 @@ After=pipewire.service sound.target
 
 [Service]
 Type=simple
-ExecStart=/home/shawnion/.local/share/whisper-ptt/start-daemon.sh
+ExecStart=%h/.local/share/whisper-ptt/start-daemon.sh
 Restart=always
 RestartSec=3
 Environment=PYTHONUNBUFFERED=1

@@ -86,6 +86,7 @@ Custom settings live in `~/.config/whisper-ptt/config.json`:
 }
 ```
 
+- **Safety:** known desktop actions (workspaces, volume, media, app launches, URLs, lock, screenshots; allowlist in `daemon/llm_command.py`) run instantly, chains included. Any other command is typed into the terminal if one is focused, otherwise it waits for you to click **Run** on a notification. Test the allowlist with `python3 daemon/test_llm_command.py`.
 - `"auto_execute": true` — Automatically hits <kbd>Enter</kbd> on terminal commands instead of just typing them.
 - `"sound_volume": 0.15` — Lower audio cue volume (or `false` to disable sound).
 - `"terminal_auto_command": true` — Always convert dictation to commands whenever a terminal is focused.

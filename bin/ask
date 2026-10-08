@@ -2,11 +2,11 @@
 # Quick CLI assistant: ask <natural language prompt> or ask (voice)
 set -e
 
-LLM_CMD_PY="/home/shawnion/.local/share/whisper-ptt/llm_command.py"
+LLM_CMD_PY="$HOME/.local/share/whisper-ptt/llm_command.py"
 
 if [ $# -eq 0 ]; then
     echo "🎙️ Listening... (Speak your request, then press Ctrl+C or wait)"
-    /home/shawnion/.local/bin/whisper-ptt command-toggle
+    $HOME/.local/bin/whisper-ptt command-toggle
     exit 0
 fi
 

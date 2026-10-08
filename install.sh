@@ -48,10 +48,18 @@ fi
 # 3. Setup Python Virtual Environment with CUDA acceleration
 echo -e "\n${YELLOW}[3/6] Setting up Whisper virtual environment (CUDA)...${NC}"
 VENV_DIR="$SHARE_DIR/venv"
-uv venv "$VENV_DIR" --python 3.12 2>/dev/null || uv venv "$VENV_DIR"
+uv venv "$VENV_DIR" --python 3.12 --allow-existing
 
-echo "Installing faster-whisper and CUDA 12 runtimes..."
-uv pip install --python "$VENV_DIR" faster-whisper "av<14" nvidia-cublas-cu12 nvidia-cudnn-cu12
+PKGS=(faster-whisper "av<14")
+HAS_CUDA=0
+if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
+    HAS_CUDA=1
+    PKGS+=(nvidia-cublas-cu12 nvidia-cudnn-cu12)
+    echo "Installing faster-whisper and CUDA 12 runtimes..."
+else
+    echo "No NVIDIA GPU found, installing CPU-only faster-whisper..."
+fi
+uv pip install --python "$VENV_DIR" "${PKGS[@]}"
 
 # 4. Copy daemon and scripts
 echo -e "\n${YELLOW}[4/6] Installing scripts and daemon...${NC}"
@@ -61,16 +69,19 @@ cp -f "$REPO_DIR/daemon/client.py" "$SHARE_DIR/"
 cp -f "$REPO_DIR/daemon/llm_command.py" "$SHARE_DIR/"
 chmod +x "$SHARE_DIR/start-daemon.sh" "$SHARE_DIR/daemon.py" "$SHARE_DIR/client.py" "$SHARE_DIR/llm_command.py"
 
-for f in "$REPO_DIR/bin/"*; do
-    if [ -f "$f" ]; then
-        cp -f "$f" "$BIN_DIR/"
-        chmod +x "$BIN_DIR/$(basename "$f")"
-    fi
+cp -f "$REPO_DIR/bin/whisper-ptt" "$REPO_DIR/bin/ask" "$BIN_DIR/"
+chmod +x "$BIN_DIR/whisper-ptt" "$BIN_DIR/ask"
+# Flatpak launcher shims: never clobber an existing binary of the same name
+for f in "$REPO_DIR/bin/"{discord,google-chrome,obsidian,zen}; do
+    [ -e "$BIN_DIR/$(basename "$f")" ] || install -m 755 "$f" "$BIN_DIR/"
 done
 
 # Copy config if not already present
 if [ ! -f "$CONFIG_DIR/config.json" ]; then
     cp "$REPO_DIR/config/config.json" "$CONFIG_DIR/config.json"
+    if [ "$HAS_CUDA" -eq 0 ]; then
+        sed -i 's/"cuda"/"cpu"/; s/"float16"/"int8"/; s/"large-v3-turbo"/"small.en"/' "$CONFIG_DIR/config.json"
+    fi
 fi
 
 # 5. Setup Systemd User Service
