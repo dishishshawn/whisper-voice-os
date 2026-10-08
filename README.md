@@ -12,9 +12,13 @@
   - **Intent-to-Command**: Local Ollama (`qwen3:14b`) with zero-latency prefill in **~250ms**.
   - **Total Pipeline**: Under **0.5 seconds** from voice end to executed command.
 - **Pre-warmed GPU Daemon**: Runs in background via a `systemd --user` service. Keeps model in VRAM (~1.5GB) with CUDA kernels warmed up so there is zero cold-start delay.
-- **Wayland / Hyprland Integration**:
-  - Automatically manages windows, workspaces, fullscreen, floating, screenshotting, volume, and media playback.
-  - In terminals, types executable shell commands directly onto your prompt.
+- **Live Top Bar Feedback (Waybar)**: Integrated status pill in the top bar showing live state (`Idle`, `Dictating`, `Thinking`, `Running`) with interactive left/right click toggles.
+- **Context-Aware Dev & Cloud Code Intelligence**:
+  - Automatically identifies current working directory of the active terminal shell via `/proc`.
+  - Detects active tech stack: Git branch & uncommitted status, Docker & Docker Compose, local Supabase, Bun vs Node/npm, Justfile recipes, Rust, Python.
+  - Clipboard error inspection: automatically reads compiler errors, traces, and snippets from clipboard when asking to fix or debug.
+- **Agentic Multi-Step Desktop Execution**: Generates safe compound workflows (`&&`, subshells `(...) &`), process management, and diagnostic notifications.
+
 - **Silero VAD Built-in**: Discards ambient noise and prevents hallucinations.
 - **Subtle Feedback**: Gentle, non-intrusive audio cues (25% volume) and desktop notifications via `notify-send` / SwayNC.
 
@@ -61,7 +65,36 @@ The installer will:
 2. Set up a Python virtual environment with `uv` and CUDA runtime libraries (`nvidia-cublas-cu12`, `nvidia-cudnn-cu12`).
 3. Install and pre-warm the Whisper daemon as a `systemd --user` service.
 4. Install all CLI helpers to `~/.local/bin/`.
-5. Add keybindings to your `~/.config/hypr/hyprland.conf` (if present).
+6. Install the Waybar status module (`whisper-waybar`) to `~/.local/bin/`.
+
+### 📊 Waybar Top Bar Setup
+
+Add `"custom/whisper"` to your `~/.config/waybar/config.jsonc`:
+
+```jsonc
+"custom/whisper": {
+  "format": "{}",
+  "return-type": "json",
+  "exec": "/home/<user>/.local/bin/whisper-waybar",
+  "on-click": "/home/<user>/.local/bin/whisper-ptt toggle",
+  "on-click-right": "/home/<user>/.local/bin/whisper-ptt command-toggle",
+  "signal": 8,
+  "tooltip": true
+}
+```
+
+And add the styling to `~/.config/waybar/style.css`:
+
+```css
+#custom-whisper {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  padding: 0 10px;
+}
+#custom-whisper.recording { background: rgba(237, 135, 150, 0.25); color: #ed8796; }
+#custom-whisper.thinking  { background: rgba(238, 212, 159, 0.25); color: #eed49f; }
+#custom-whisper.executing { background: rgba(166, 218, 149, 0.25); color: #a6da95; }
+```
 
 ---
 

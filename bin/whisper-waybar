@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Outputs Waybar JSON for Whisper Voice OS status
+STATE_FILE="/run/user/$(id -u)/whisper-ptt/state.txt"
+
+STATE="idle"
+if [ -f "$STATE_FILE" ]; then
+    STATE=$(cat "$STATE_FILE" 2>/dev/null || echo "idle")
+fi
+
+case "$STATE" in
+    listening_dictate)
+        echo '{"text": "󰍬 Dictating...", "tooltip": "Voice Dictation active\nSuper+Space to stop", "class": "recording"}'
+        ;;
+    listening_command)
+        echo '{"text": "󱐋 Voice OS...", "tooltip": "Voice Command active\nSuper+C to stop", "class": "recording"}'
+        ;;
+    thinking)
+        echo '{"text": "󰘦 Thinking...", "tooltip": "Local Ollama reasoning...", "class": "thinking"}'
+        ;;
+    executing)
+        echo '{"text": "󱐋 Running...", "tooltip": "Executing action...", "class": "executing"}'
+        ;;
+    *)
+        echo '{"text": "󰍬", "tooltip": "Voice OS: Ready\n• Left-click: Dictate (Super+Space)\n• Right-click: Voice Command (Super+C)", "class": "idle"}'
+        ;;
+esac

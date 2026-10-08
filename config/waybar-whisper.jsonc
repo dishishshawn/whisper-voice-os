@@ -1,0 +1,12 @@
+// Add "custom/whisper" to your "modules-left" or "modules-right" in ~/.config/waybar/config.jsonc
+{
+  "custom/whisper": {
+    "format": "{}",
+    "return-type": "json",
+    "exec": "$HOME/.local/bin/whisper-waybar",
+    "on-click": "$HOME/.local/bin/whisper-ptt toggle",
+    "on-click-right": "$HOME/.local/bin/whisper-ptt command-toggle",
+    "signal": 8,
+    "tooltip": true
+  }
+}

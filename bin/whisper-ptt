@@ -44,6 +44,14 @@ except Exception:
 ')"
 fi
 
+STATE_FILE="$RUNTIME_DIR/state.txt"
+
+set_state() {
+    local s="$1"
+    echo "$s" > "$STATE_FILE"
+    pkill -42 -x waybar 2>/dev/null || true
+}
+
 play_sound() {
     local sound_file="$1"
     if [ "$ENABLE_SOUND" -eq 1 ] && [ -f "$sound_file" ]; then
@@ -62,6 +70,7 @@ start_recording() {
         fi
     fi
 
+    set_state "listening_${req_mode}"
     echo "$req_mode" > "$MODE_FILE"
 
     # Ensure daemon is up
@@ -107,6 +116,7 @@ stop_recording() {
     fi
 
     if [ ! -f "$AUDIO_FILE" ]; then
+        set_state "idle"
         exit 0
     fi
 
@@ -115,13 +125,17 @@ stop_recording() {
     # Ignore accidental micro-presses (< 0.25 seconds)
     if [ "$file_size" -lt 8000 ]; then
         rm -f "$AUDIO_FILE"
+        set_state "idle"
         exit 0
     fi
 
     if [ ! -S "$SOCK_FILE" ]; then
         notify-send -t 3000 -h string:x-canonical-private-synchronous:whisper-ptt -a "Whisper PTT" "Error" "Whisper daemon is not running."
+        set_state "idle"
         exit 1
     fi
+
+    set_state "thinking"
 
     # Query whisper daemon
     local text
@@ -130,6 +144,7 @@ stop_recording() {
 
     if [ -z "$text" ]; then
         notify-send -t 1200 -h string:x-canonical-private-synchronous:whisper-ptt -a "Whisper PTT" "🎙️ No speech detected"
+        set_state "idle"
         exit 0
     fi
 
@@ -155,12 +170,14 @@ stop_recording() {
     fi
 
     if [ "$is_command" -eq 1 ]; then
+        set_state "thinking"
         notify-send -t 1200 -h string:x-canonical-private-synchronous:whisper-ptt -a "Voice OS" "🧠 Thinking..." "$cmd_prompt"
         local gen_cmd
         gen_cmd=$("$LLM_CMD_PY" "$cmd_prompt" 2>/dev/null || true)
 
         if [ -n "$gen_cmd" ]; then
             printf "%s" "$gen_cmd" | wl-copy
+            set_state "executing"
 
             if "$LLM_CMD_PY" --check "$gen_cmd"; then
                 # Known desktop action (allowlist in llm_command.py): run directly
@@ -178,15 +195,20 @@ stop_recording() {
                 # Anything else outside a terminal: ask first via a Run button
                 ( "$LLM_CMD_PY" --confirm "$gen_cmd" && bash -c "$gen_cmd" >> "$RUNTIME_DIR/exec.log" 2>&1 ) &
             fi
+            sleep 1.2
+            set_state "idle"
             exit 0
         fi
     fi
 
     # Standard dictation fallback
+    set_state "executing"
     notify-send -t 1500 -h string:x-canonical-private-synchronous:whisper-ptt -a "Whisper PTT" "Transcribed:" "$text"
     printf "%s" "$text" | wl-copy
     sleep 0.05
     wtype -d 1 -- "$text "
+    sleep 0.8
+    set_state "idle"
 }
 
 toggle_recording() {

@@ -69,8 +69,8 @@ cp -f "$REPO_DIR/daemon/client.py" "$SHARE_DIR/"
 cp -f "$REPO_DIR/daemon/llm_command.py" "$SHARE_DIR/"
 chmod +x "$SHARE_DIR/start-daemon.sh" "$SHARE_DIR/daemon.py" "$SHARE_DIR/client.py" "$SHARE_DIR/llm_command.py"
 
-cp -f "$REPO_DIR/bin/whisper-ptt" "$REPO_DIR/bin/ask" "$BIN_DIR/"
-chmod +x "$BIN_DIR/whisper-ptt" "$BIN_DIR/ask"
+cp -f "$REPO_DIR/bin/whisper-ptt" "$REPO_DIR/bin/ask" "$REPO_DIR/bin/whisper-waybar" "$BIN_DIR/"
+chmod +x "$BIN_DIR/whisper-ptt" "$BIN_DIR/ask" "$BIN_DIR/whisper-waybar"
 # Flatpak launcher shims: never clobber an existing binary of the same name
 for f in "$REPO_DIR/bin/"{discord,google-chrome,obsidian,zen}; do
     [ -e "$BIN_DIR/$(basename "$f")" ] || install -m 755 "$f" "$BIN_DIR/"
@@ -121,5 +121,10 @@ echo "CLI tools:"
 echo "  - ask <prompt>        : Natural language to shell command"
 echo "  - whisper-ptt toggle  : Start/stop dictation"
 echo ""
+echo "Waybar Status Module:"
+echo "  - Binary installed to ~/.local/bin/whisper-waybar"
+echo "  - Config snippets: config/waybar-whisper.jsonc and config/waybar-whisper.css"
+echo ""
 echo "Service status:"
 echo "  systemctl --user status whisper-ptt.service"
+

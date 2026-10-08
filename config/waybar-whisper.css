@@ -1,0 +1,31 @@
+/* Add to ~/.config/waybar/style.css */
+#custom-whisper {
+    background: rgba(255, 255, 255, 0.08);
+    color: #cad3f5;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 9999px;
+    padding: 0 10px;
+    margin: 2px 3px;
+    font-size: 13px;
+    transition: all 0.2s ease-in-out;
+}
+
+#custom-whisper.recording {
+    background: rgba(237, 135, 150, 0.25);
+    color: #ed8796;
+    border-color: rgba(237, 135, 150, 0.5);
+    font-weight: bold;
+}
+
+#custom-whisper.thinking {
+    background: rgba(238, 212, 159, 0.25);
+    color: #eed49f;
+    border-color: rgba(238, 212, 159, 0.5);
+}
+
+#custom-whisper.executing {
+    background: rgba(166, 218, 149, 0.25);
+    color: #a6da95;
+    border-color: rgba(166, 218, 149, 0.5);
+    font-weight: bold;
+}
